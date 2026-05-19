@@ -1,0 +1,17 @@
+#primero tienen que crear una nueva terminal
+#luego en su terminal poner lo siguiente:
+python -m venv venv
+
+#y luego tienen que activar el vnev que acaban de crear
+
+#para PowerShell:
+.\venv\Scripts\Activate.ps1
+
+#para DOS:
+venv\Scripts\activate.bat
+
+#para Bash:
+source venv/bin/activate
+
+#luego tienen que instalar todas las librerias:
+pip install -r requirements.txt 
