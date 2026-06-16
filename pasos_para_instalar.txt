@@ -13,5 +13,9 @@ venv\Scripts\activate.bat
 #para Bash:
 source venv/bin/activate
 
+en caso de dar error probar: 
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+y kuego intentar de vuelta
+
 #luego tienen que instalar todas las librerias:
-pip install -r requirements.txt 
+pip install -r requirements.txt
