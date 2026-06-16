@@ -1,6 +1,7 @@
-import cv2, time, os 
+import cv2, time, os, matplotlib.pyplot as plt
 import pygame
-import asyncio 
+import asyncio
+from mapamundi import Mapa
 # Intentamos la importación alternativa que suele saltarse el error de 'solutions'
 try:
     import mediapipe as mp
@@ -16,9 +17,14 @@ COLOR_FONDO = (30, 30, 30)
 COLOR_PUNTO = (0, 255, 200)
 RADIO_PUNTO = 10
 
+resultados = None # Variable global para almacenar los resultados de MediaPipe
+
+
 class MotorGrafico:
     def __init__(self):
         pygame.init()
+        self.mapa = Mapa() # Instancia del mapa para actualizar puntos
+        
         self.pantalla = pygame.display.set_mode((ANCHO, ALTO))
         pygame.display.set_caption("Punto Asincrónico con Pygame")
         self.reloj = pygame.time.Clock()
@@ -69,7 +75,6 @@ class MotorGrafico:
 
         pygame.quit()
 
-
 def Mano_cerrada(results):
     if results.multi_hand_landmarks[0].landmark[8].y > results.multi_hand_landmarks[0].landmark[5].y and \
         results.multi_hand_landmarks[0].landmark[12].y > results.multi_hand_landmarks[0].landmark[9].y and \
@@ -100,13 +105,25 @@ def Posicion_mano(results):
     eje_x = (mano.landmark[1].x + mano.landmark[5].x + mano.landmark[9].x + mano.landmark[13].x + mano.landmark[17].x) / 5
     return (eje_x, eje_y)
 
-def Cursor(results):
-    posicion_en_camara = Posicion_mano(results)
+def Cursor():
+    global resultados
+    if resultados is None or not resultados.multi_hand_landmarks:
+        return None  # Retorna una posición por defecto si no hay resultados
+    
+    posicion_en_camara = Posicion_mano(resultados)
     x = posicion_en_camara[0] * 1280
     y = posicion_en_camara[1] * 720
-    return (x, y)
+
+    # 2. Conversión Proporcional para GeoPandas (Escala del mundo real)
+    # MediaPipe entrega de 0 a 1. Lo mapeamos a Longitud [-180, 180] y Latitud [90, -90]
+    x_mapa = (posicion_en_camara[0] * 360) - 180
+    y_mapa = 90 - (posicion_en_camara[1] * 180)
+
+    print(x, y)
+    return ((x, y), (x_mapa, y_mapa))
 
 async def Ver_gestos(motor_grafico):  
+    global resultados
     hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7)
     cap = cv2.VideoCapture(0)
     mano_cerrada = False
@@ -118,12 +135,12 @@ async def Ver_gestos(motor_grafico):
 
         image = cv2.flip(image, 1) # Efecto espejo para que sea natural
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = hands.process(image_rgb)
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
+        resultados = hands.process(image_rgb)
+        if resultados.multi_hand_landmarks:
+            for hand_landmarks in resultados.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            if Mano_cerrada(results):
+            if Mano_cerrada(resultados):
                 mano_agarre = False
                 posicion_inicial = None
                 posicion_final = None
@@ -139,24 +156,26 @@ async def Ver_gestos(motor_grafico):
                         mano_cerrada = False
                 
                         
-            elif detectar_gesto(results):
+            elif detectar_gesto(resultados):
                 cv2.putText(image, "Apretón", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 mano_cerrada = False
                 bandera_cerrada = 0
                 if not mano_agarre:
                     mano_agarre = True
                     inicio_agarre = time.time()
-                    posicion_inicial = Cursor(results)
+                    posicion_inicial, posicion_mapa = Cursor()
                     posicion_final = posicion_inicial
                 else:
                     # Movimiento continuo:
                     if time.time() - inicio_agarre > 0.01: # Reducimos el tiempo para más sensibilidad
-                        posicion_final = Cursor(results)
+                        posicion_final, posicion_mapa = Cursor()
                         dx = posicion_final[0] - posicion_inicial[0]
                         dy = posicion_final[1] - posicion_inicial[1]
                         
                         # Movemos el motor
                         motor_grafico.desplazar(dx, dy)
+                        # Enviamos las coordenadas corregidas al mapa interactivo
+                        motor_grafico.mapa.Actualizar_puntos(x=posicion_mapa[0], y=posicion_mapa[1])
                         
                         # ¡IMPORTANTE!: Actualizamos la posición inicial para el próximo frame
                         # Esto permite que el movimiento sea fluido sin "soltar" el agarre.
@@ -171,11 +190,13 @@ async def Ver_gestos(motor_grafico):
                 posicion_inicial = None
                 posicion_final = None
             
-            x, y = Posicion_mano(results)
+            x, y = Posicion_mano(resultados)
             cv2.circle(image, (int(x*image.shape[1]), int(y*image.shape[0])), 5, (0, 0, 255), 2)
                 
         cv2.imshow('Conoce el Mundo - Test IA', image)
         if cv2.waitKey(5) & 0xFF == 27: break
+
+        plt.pause(0.001) # Permite que Matplotlib procese eventos y actualice la ventana del mapa sin bloquear Pygame
 
         await asyncio.sleep(0) # Cede el control a Pygame
     cap.release()

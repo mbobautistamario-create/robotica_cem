@@ -10,7 +10,6 @@ try:
 except ImportError as e:
     print(f"❌ Error de importación: {e}")
 
-
 # --- Configuración Inicial ---
 ANCHO, ALTO = 1280, 720
 COLOR_FONDO = (30, 30, 30)
