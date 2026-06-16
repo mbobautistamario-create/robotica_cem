@@ -91,7 +91,7 @@ class Mapa():
                     facecolors='#e67e22', 
                     edgecolors='white', 
                     linewidths=1.0,
-                    zonder=3
+                    zorder=3
                 )
                 
                 # Agregamos la iluminación directamente encima del mapa base sin recalcular nada
@@ -124,7 +124,7 @@ class Mapa():
 
     def Actualizar_puntos(self, x, y):
         self.punto_actual = Point(x, y)
-        self.marcador_mano.set_data(x, y)  # Actualiza la posición del marcador de la mano
+        self.marcador_mano.set_data([x], [y])  # Actualiza la posición del marcador de la mano
         # Aquí podrías iniciar tu bucle de Pygame o cualquier otra lógica que necesites
         # Conectar el evento de movimiento
         print("actualizando puntos: ", x, "-", y)
