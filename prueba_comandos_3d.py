@@ -105,22 +105,15 @@ def Posicion_mano(results):
     eje_x = (mano.landmark[1].x + mano.landmark[5].x + mano.landmark[9].x + mano.landmark[13].x + mano.landmark[17].x) / 5
     return (eje_x, eje_y)
 
-def Cursor():
+def Obtener_Posicion_Pixeles():
     global resultados
     if resultados is None or not resultados.multi_hand_landmarks:
-        return None  # Retorna una posición por defecto si no hay resultados
+        return None
     
     posicion_en_camara = Posicion_mano(resultados)
-    x = posicion_en_camara[0] * 1280
-    y = posicion_en_camara[1] * 720
-
-    # 2. Conversión Proporcional para GeoPandas (Escala del mundo real)
-    # MediaPipe entrega de 0 a 1. Lo mapeamos a Longitud [-180, 180] y Latitud [90, -90]
-    x_mapa = (posicion_en_camara[0] * 360) - 180
-    y_mapa = 90 - (posicion_en_camara[1] * 180)
-
-    print(x, y)
-    return ((x, y), (x_mapa, y_mapa))
+    x = posicion_en_camara[0] * ANCHO
+    y = posicion_en_camara[1] * ALTO
+    return (x, y)
 
 async def Ver_gestos(motor_grafico):  
     global resultados
@@ -157,29 +150,34 @@ async def Ver_gestos(motor_grafico):
                 
                         
             elif detectar_gesto(resultados):
-                cv2.putText(image, "Apretón", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(image, "Moviendo", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 mano_cerrada = False
                 bandera_cerrada = 0
+                posicion_actual_mano = Obtener_Posicion_Pixeles()
                 if not mano_agarre:
                     mano_agarre = True
                     inicio_agarre = time.time()
-                    posicion_inicial, posicion_mapa = Cursor()
-                    posicion_final = posicion_inicial
+                    posicion_inicial= posicion_actual_mano
                 else:
                     # Movimiento continuo:
                     if time.time() - inicio_agarre > 0.01: # Reducimos el tiempo para más sensibilidad
-                        posicion_final, posicion_mapa = Cursor()
-                        dx = posicion_final[0] - posicion_inicial[0]
-                        dy = posicion_final[1] - posicion_inicial[1]
+                        dx = posicion_actual_mano[0] - posicion_inicial[0]
+                        dy = posicion_actual_mano[1] - posicion_inicial[1]
                         
                         # Movemos el motor
                         motor_grafico.desplazar(dx, dy)
-                        # Enviamos las coordenadas corregidas al mapa interactivo
-                        motor_grafico.mapa.Actualizar_puntos(x=posicion_mapa[0], y=posicion_mapa[1])
+
+                        # ─── CONVERSIÓN CRÍTICA PARA EL MAPAMUNDI ───
+                        # Traducimos la posición real del punto de Pygame (0 a 1280) a la escala de Matplotlib (-180 a 180)
+                        x_mapa = (motor_grafico.pos_x / ANCHO * 360) - 180
+                        y_mapa = 90 - (motor_grafico.pos_y / ALTO * 180)
                         
+                        # Actualizamos el mapa con la posición del punto arrastrado
+                        motor_grafico.mapa.Actualizar_puntos(x=x_mapa, y=y_mapa)
+
                         # ¡IMPORTANTE!: Actualizamos la posición inicial para el próximo frame
                         # Esto permite que el movimiento sea fluido sin "soltar" el agarre.
-                        posicion_inicial = posicion_final
+                        posicion_inicial = posicion_actual_mano
                         inicio_agarre = time.time()
             
             else:
@@ -188,7 +186,6 @@ async def Ver_gestos(motor_grafico):
                 bandera_cerrada = 0
                 mano_agarre = False
                 posicion_inicial = None
-                posicion_final = None
             
             x, y = Posicion_mano(resultados)
             cv2.circle(image, (int(x*image.shape[1]), int(y*image.shape[0])), 5, (0, 0, 255), 2)
@@ -198,7 +195,7 @@ async def Ver_gestos(motor_grafico):
 
         plt.pause(0.001) # Permite que Matplotlib procese eventos y actualice la ventana del mapa sin bloquear Pygame
 
-        await asyncio.sleep(0) # Cede el control a Pygame
+        await asyncio.sleep(0.01) # Cede el control a Pygame
     cap.release()
     cv2.destroyAllWindows()
 

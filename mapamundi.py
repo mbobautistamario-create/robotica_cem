@@ -2,6 +2,8 @@
 #matplotlib.use("TkAgg")
 
 import geopandas as gpd
+import matplotlib
+matplotlib.use("TkAgg")  # Fuerza el backend seguro para hilos
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from matplotlib.collections import PolyCollection
@@ -130,5 +132,9 @@ class Mapa():
         print("actualizando puntos: ", x, "-", y)
         self.mover_mouse()
 
-        fig.canvas.draw_idle()
-        fig.canvas.flush_events()
+        # Guardamos en un bloque seguro por si la ventana se está moviendo
+        try:
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+        except Exception:
+            pass # Evita que el programa muera si Windows bloquea el hilo gráfico
