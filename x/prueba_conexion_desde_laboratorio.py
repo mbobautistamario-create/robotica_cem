@@ -2,10 +2,10 @@
 import pymysql
 
 connection = pymysql.connect(
-    host='192.168.0.250',
-    port=3306,
-    user='tmagnano549',
-    password='tMagnano221%',
+    host='127.0.0.1', #192.168.0.250
+    #port=3306,
+    user='mortega907', #tmagnano549
+    password='mOrtega585$', #tMagnano221%
     database='c_mundo_db'
 )
 
@@ -13,7 +13,7 @@ if connection is not None:
     cur = connection.cursor()
 
     # CONSULTA SQL
-    sql = "SELECT * FROM tu_tabla"
+    sql = "SELECT * FROM PAIS"
 
     # EJECUCIÓN
     cur.execute(sql)
