@@ -1,8 +1,7 @@
 import cv2, time, os, matplotlib.pyplot as plt
-import pygame
 import asyncio
 from mapamundi import Mapa
-# Intentamos la importación alternativa que suele saltarse el error de 'solutions'
+
 try:
     import mediapipe as mp
     from mediapipe.python.solutions import hands as mp_hands
@@ -11,69 +10,25 @@ try:
 except ImportError as e:
     print(f"❌ Error de importación: {e}")
 
-# --- Configuración Inicial ---
 ANCHO, ALTO = 1280, 720
-COLOR_FONDO = (30, 30, 30)
-COLOR_PUNTO = (0, 255, 200)
-RADIO_PUNTO = 10
+resultados = None 
 
-resultados = None # Variable global para almacenar los resultados de MediaPipe
-
-
-class MotorGrafico:
+class EstadoPunto:
     def __init__(self):
-        pygame.init()
-        self.mapa = Mapa() # Instancia del mapa para actualizar puntos
-        
-        self.pantalla = pygame.display.set_mode((ANCHO, ALTO))
-        pygame.display.set_caption("Punto Asincrónico con Pygame")
-        self.reloj = pygame.time.Clock()
-        self.ejecutando = True
-        
-        # Posición inicial del punto
+        self.mapa = Mapa()
         self.pos_x = ANCHO // 2
         self.pos_y = ALTO // 2
 
     def actualizar_pos(self, nueva_x, nueva_y):
-        """
-        Función solicitada para decirle al script 
-        dónde pintar el punto nuevamente.
-        """
         self.pos_x = nueva_x
         self.pos_y = nueva_y
-        print("actualizado a: ", self.pos_x, "-", self.pos_y)
     
     def desplazar(self, delta_x, delta_y):
-        """
-        Función solicitada para desplazar el punto.
-        """
-        # Aplicamos un factor de escala si es necesario para que el movimiento sea suave
         self.pos_x += delta_x * 0.5
         self.pos_y += delta_y * 0.5
-        
-        # Mantener el punto dentro de la pantalla
         self.pos_x = max(0, min(ANCHO, self.pos_x))
         self.pos_y = max(0, min(ALTO, self.pos_y))
-        print("desplazado a: ", self.pos_x, "-", self.pos_y)
 
-    async def bucle_principal(self):
-        while self.ejecutando:
-            # 1. Manejo de eventos (Cerrar ventana)
-            for evento in pygame.event.get():
-                if evento.type == pygame.QUIT:
-                    self.ejecutando = False
-
-            self.pantalla.fill(COLOR_FONDO)
-            # Convertimos a int() para que Pygame no tenga problemas de renderizado
-            pygame.draw.circle(self.pantalla, COLOR_PUNTO, (int(self.pos_x), int(self.pos_y)), RADIO_PUNTO)
-            pygame.display.flip()
-
-            # 4. Control de FPS y cedido de control asincrónico
-            # Esto evita que Pygame bloquee el hilo y permite que otras tareas corran
-            await asyncio.sleep(0)
-            self.reloj.tick(60)
-
-        pygame.quit()
 
 def Mano_cerrada(results):
     if results.multi_hand_landmarks[0].landmark[8].y > results.multi_hand_landmarks[0].landmark[5].y and \
@@ -81,23 +36,34 @@ def Mano_cerrada(results):
         results.multi_hand_landmarks[0].landmark[16].y > results.multi_hand_landmarks[0].landmark[13].y and \
         results.multi_hand_landmarks[0].landmark[20].y > results.multi_hand_landmarks[0].landmark[17].y:
         return True
-    else:
-        return False
+    return False
 
 def detectar_gesto(resultados):
-    # Condición para "Apretón"
+    # Apretón (Pulgar + Índice)
     punta_indice = resultados.multi_hand_landmarks[0].landmark[8]
     punta_pulgar = resultados.multi_hand_landmarks[0].landmark[4]
     punta_medio = resultados.multi_hand_landmarks[0].landmark[12]
-    # Distancia horizontal entre pulgar e índice
+    
     distancia_x = abs(punta_indice.x - punta_pulgar.x)
     distancia_y = abs(punta_indice.y - punta_pulgar.y)
     
-    # Si están muy cerca horizontalmente y verticalmente (casi tocándose)
-    if distancia_x < 0.05 and distancia_y < 0.05 and punta_medio.y < punta_indice.y: 
-        return True
-    else:
-        return False
+    return distancia_x < 0.05 and distancia_y < 0.05 and punta_medio.y < punta_indice.y
+
+def detectar_zoom_in(resultados):
+    # Zoom In: Pulgar (4) + Dedo Medio (12)
+    punta_pulgar = resultados.multi_hand_landmarks[0].landmark[4]
+    punta_medio = resultados.multi_hand_landmarks[0].landmark[12]
+    
+    distancia = ((punta_pulgar.x - punta_medio.x)**2 + (punta_pulgar.y - punta_medio.y)**2)**0.5
+    return distancia < 0.05
+
+def detectar_zoom_out(resultados):
+    # Zoom Out: Pulgar (4) + Dedo Anular (16)
+    punta_pulgar = resultados.multi_hand_landmarks[0].landmark[4]
+    punta_anular = resultados.multi_hand_landmarks[0].landmark[16]
+    
+    distancia = ((punta_pulgar.x - punta_anular.x)**2 + (punta_pulgar.y - punta_anular.y)**2)**0.5
+    return distancia < 0.05
 
 def Posicion_mano(results):
     mano = results.multi_hand_landmarks[0]
@@ -109,81 +75,90 @@ def Obtener_Posicion_Pixeles():
     global resultados
     if resultados is None or not resultados.multi_hand_landmarks:
         return None
-    
     posicion_en_camara = Posicion_mano(resultados)
-    x = posicion_en_camara[0] * ANCHO
-    y = posicion_en_camara[1] * ALTO
-    return (x, y)
+    return (posicion_en_camara[0] * ANCHO, posicion_en_camara[1] * ALTO)
 
-async def Ver_gestos(motor_grafico):  
+def Entrar_Pais(pais):
+    print(f"Entrando al paquete {pais}")
+
+async def Ver_gestos(estado_punto):  
     global resultados
     hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7)
     cap = cv2.VideoCapture(0)
     mano_cerrada = False
     mano_agarre = False
     posicion_inicial = None
+
     while cap.isOpened():
         success, image = cap.read()
         if not success: break
 
-        image = cv2.flip(image, 1) # Efecto espejo para que sea natural
+        image = cv2.flip(image, 1)
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         resultados = hands.process(image_rgb)
+
         if resultados.multi_hand_landmarks:
             for hand_landmarks in resultados.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
+            # 1. Gesto: Mano cerrada (Ingresar al País)
             if Mano_cerrada(resultados):
                 mano_agarre = False
                 posicion_inicial = None
-                posicion_final = None
                 cv2.putText(image, "Mano cerrada", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                if mano_cerrada == False:
+                if not mano_cerrada:
                     mano_cerrada = True
                     bandera_cerrada = time.time()
-                    print("inicio bandera")
                 else:
                     if time.time() - bandera_cerrada > 2:
                         print("Ingresando")
                         bandera_cerrada = time.time()
                         mano_cerrada = False
+                        Entrar_Pais(estado_punto.mapa.pais_actual)
                 
-                        
+            # 2. Gesto: Apretón (Mover / Arrastrar Alfiler)
             elif detectar_gesto(resultados):
                 cv2.putText(image, "Moviendo", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 mano_cerrada = False
-                bandera_cerrada = 0
                 posicion_actual_mano = Obtener_Posicion_Pixeles()
+
                 if not mano_agarre:
                     mano_agarre = True
                     inicio_agarre = time.time()
-                    posicion_inicial= posicion_actual_mano
+                    posicion_inicial = posicion_actual_mano
                 else:
-                    # Movimiento continuo:
-                    if time.time() - inicio_agarre > 0.01: # Reducimos el tiempo para más sensibilidad
+                    if time.time() - inicio_agarre > 0.01:
                         dx = posicion_actual_mano[0] - posicion_inicial[0]
                         dy = posicion_actual_mano[1] - posicion_inicial[1]
                         
-                        # Movemos el motor
-                        motor_grafico.desplazar(dx, dy)
+                        estado_punto.desplazar(dx, dy)
 
-                        # ─── CONVERSIÓN CRÍTICA PARA EL MAPAMUNDI ───
-                        # Traducimos la posición real del punto de Pygame (0 a 1280) a la escala de Matplotlib (-180 a 180)
-                        x_mapa = (motor_grafico.pos_x / ANCHO * 360) - 180
-                        y_mapa = 90 - (motor_grafico.pos_y / ALTO * 180)
+                        x_mapa = (estado_punto.pos_x / ANCHO * 360) - 180
+                        y_mapa = 90 - (estado_punto.pos_y / ALTO * 180)
                         
-                        # Actualizamos el mapa con la posición del punto arrastrado
-                        motor_grafico.mapa.Actualizar_puntos(x=x_mapa, y=y_mapa)
+                        estado_punto.mapa.Actualizar_puntos(x=x_mapa, y=y_mapa)
 
-                        # ¡IMPORTANTE!: Actualizamos la posición inicial para el próximo frame
-                        # Esto permite que el movimiento sea fluido sin "soltar" el agarre.
                         posicion_inicial = posicion_actual_mano
                         inicio_agarre = time.time()
+
+            # 3. Gesto: Zoom In (Pulgar + Medio)
+            elif detectar_zoom_in(resultados):
+                cv2.putText(image, "Zoom +", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                mano_cerrada = False
+                mano_agarre = False
+                estado_punto.mapa.aplicar_zoom(0.96)  # Factor < 1 acerca la vista
+
+            # 4. Gesto: Zoom Out (Pulgar + Anular)
+            elif detectar_zoom_out(resultados):
+                cv2.putText(image, "Zoom -", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 165, 0), 2)
+                mano_cerrada = False
+                mano_agarre = False
+                estado_punto.mapa.aplicar_zoom(1.04)  # Factor > 1 aleja la vista
             
+            # 5. Estado por defecto: Mano Abierta
             else:
                 cv2.putText(image, "Mano abierta", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 mano_cerrada = False
-                bandera_cerrada = 0
                 mano_agarre = False
                 posicion_inicial = None
             
@@ -192,19 +167,15 @@ async def Ver_gestos(motor_grafico):
                 
         cv2.imshow('Conoce el Mundo - Test IA', image)
         if cv2.waitKey(5) & 0xFF == 27: break
+        
+        await asyncio.sleep(0.01)
 
-        plt.pause(0.001) # Permite que Matplotlib procese eventos y actualice la ventana del mapa sin bloquear Pygame
-
-        await asyncio.sleep(0.01) # Cede el control a Pygame
     cap.release()
     cv2.destroyAllWindows()
 
 async def main():
-    motor = MotorGrafico()
-    await asyncio.gather(
-        motor.bucle_principal(),
-        Ver_gestos(motor)
-    )
+    estado_punto = EstadoPunto()
+    await Ver_gestos(estado_punto)
 
-asyncio.run(main())
-
+if __name__ == "__main__":
+    asyncio.run(main())

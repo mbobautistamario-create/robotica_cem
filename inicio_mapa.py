@@ -159,10 +159,13 @@ async def Ver_gestos(estado_punto):
             x, y = Posicion_mano(resultados)
             cv2.circle(image, (int(x*image.shape[1]), int(y*image.shape[0])), 5, (0, 0, 255), 2)
                 
-        cv2.imshow('Conoce el Mundo - Test IA', image)
-        if cv2.waitKey(5) & 0xFF == 27: break
-        
-        await asyncio.sleep(0.01) # Cede control asincrónico libre de sobrecarga
+        try:
+            cv2.imshow('Conoce el Mundo - Test IA', image)
+            if cv2.waitKey(1) & 0xFF == 27: break  # Cambiado a 1ms para responder más rápido
+        except Exception:
+            pass
+
+        await asyncio.sleep(0.01) # Mantiene el control asincrónico
 
     cap.release()
     cv2.destroyAllWindows()

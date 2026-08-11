@@ -1,6 +1,3 @@
-#import matplotlib
-#matplotlib.use("TkAgg")
-
 import geopandas as gpd
 import matplotlib
 matplotlib.use("TkAgg")  # Fuerza el backend seguro para hilos
@@ -18,7 +15,7 @@ fig, ax = plt.subplots(figsize=(16, 8))
 fig.patch.set_facecolor('#f8f9fa')  # Fondo de la ventana
 ax.set_facecolor('#ecf0f1')         # Fondo del océano
 
-# 3. Dibujar el mapa base UNA SOLA VEZ al inicio
+# 3. Dibujar el mapa base
 world.plot(
     ax=ax,
     color="#2c3e50",       # Color de los países
@@ -26,18 +23,11 @@ world.plot(
     linewidth=0.6
 )
 
-# ─── CONGELACIÓN TOTAL DE LA GEOMETRÍA ───
+# Configuración inicial del mapa
 ax.axis("off")
-limites_x = ax.get_xlim()
-limites_y = ax.get_ylim()
-
-# Fijamos los límites para que NADA altere el tamaño de la ventana
-ax.set_xlim(limites_x)
-ax.set_ylim(limites_y)
 ax.set_autoscale_on(False)
-# ─────────────────────────────────────────
 
-# Texto indicador en miniatura (dentro del mapa, escala fija)
+# Texto indicador en miniatura
 texto_titulo = ax.text(
     0.5, 0.98, " MAPA MUNDI INTERACTIVO NATIVO",
     transform=ax.transAxes,
@@ -51,28 +41,20 @@ texto_titulo = ax.text(
 class Mapa():
     def __init__(self):
         self.punto_actual = Point(0, 0)
-
-        # Variables de control
         self.pais_actual = None
-        self.objeto_iluminacion = None  # Aquí guardamos el parche de color de forma segura
+        self.objeto_iluminacion = None 
 
-        # Dibujamos un punto rojo ('ro') con tamaño 10 (ms=10) y una capa alta (zorder=5)
-        # para que siempre quede por encima de los mapas y las fronteras.
+        # Marcador visual de la mano
         self.marcador_mano, = ax.plot([], [], 'ro', ms=10, zorder=5, label="Tu Mano")
 
-        # 3. Mostrar la ventana desde el constructor de forma explícitamente NO bloqueante
         plt.show(block=False)
-        plt.pause(0.1) # Pequeña pausa para que Windows cree la ventana correctamente
+        plt.pause(0.1)
 
-    # 4. Función de actualización limpia (Matplotlib puro)
     def actualizar_iluminacion(self, pais=None):
-  
-        # 1. Remueve la iluminación anterior de forma segura si existe
         if self.objeto_iluminacion is not None:
             self.objeto_iluminacion.remove()
             self.objeto_iluminacion = None
 
-        # 2. Si hay un país seleccionado, extraemos sus polígonos puros
         if pais is not None:
             seleccionado = world[world["name"] == pais]
             
@@ -80,14 +62,12 @@ class Mapa():
                 geometria = seleccionado.geometry.iloc[0]
                 coordenadas = []
                 
-                # Extraer las coordenadas exactas según si el país es un Polígono o MultiPolígono
                 if geometria.geom_type == 'Polygon':
                     coordenadas.append(list(geometria.exterior.coords))
                 elif geometria.geom_type == 'MultiPolygon':
-                    for polígono in geometria.geoms:
-                        coordenadas.append(list(polígono.exterior.coords))
+                    for poligono in geometria.geoms:
+                        coordenadas.append(list(poligono.exterior.coords))
                 
-                # Creamos la colección de polígonos nativa de Matplotlib
                 self.objeto_iluminacion = PolyCollection(
                     coordenadas, 
                     facecolors='#e67e22', 
@@ -96,45 +76,77 @@ class Mapa():
                     zorder=3
                 )
                 
-                # Agregamos la iluminación directamente encima del mapa base sin recalcular nada
                 ax.add_collection(self.objeto_iluminacion)
                 texto_titulo.set_text(f" {pais.upper()}")
         else:
             texto_titulo.set_text(" MAPA MUNDI INTERACTIVO NATIVO")
 
-        # 3. Forzar el zoom original para evitar cualquier intento de reajuste
-        ax.set_xlim(limites_x)
-        ax.set_ylim(limites_y)
+    def aplicar_zoom(self, factor):
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
 
-    # 5. Detectar movimiento del mouse
+        cx = self.punto_actual.x
+        cy = self.punto_actual.y
+
+        if cx == 0 and cy == 0:
+            cx = (xmin + xmax) / 2
+            cy = (ymin + ymax) / 2
+
+        ancho_nuevo = (xmax - xmin) * factor
+        alto_nuevo = (ymax - ymin) * factor
+
+        if 2.0 < ancho_nuevo < 360.0:
+            ax.set_xlim(cx - ancho_nuevo / 2, cx + ancho_nuevo / 2)
+            ax.set_ylim(cy - alto_nuevo / 2, cy + alto_nuevo / 2)
+
+            try:
+                fig.canvas.draw() # Forzar dibujado inmediato
+            except Exception:
+                pass
+
+    def desplazar_punto(self, dx_pixeles, dy_pixeles, ancho_pantalla, alto_pantalla):
+        """
+        Mueve el punto Y desplaza la cámara (Pan) proporcionalmente al zoom actual.
+        """
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+
+        ancho_vista = xmax - xmin
+        alto_vista = ymax - ymin
+
+        delta_x = (dx_pixeles / ancho_pantalla) * ancho_vista * 0.5
+        delta_y = -(dy_pixeles / alto_pantalla) * alto_vista * 0.5 # Invertido para eje Y
+
+        nuevo_x = self.punto_actual.x + delta_x
+        nuevo_y = self.punto_actual.y + delta_y
+
+        # Si el mapa tiene zoom aplicado, desplazamos los límites de la cámara también
+        if ancho_vista < 350.0:
+            ax.set_xlim(xmin + delta_x, xmax + delta_x)
+            ax.set_ylim(ymin + delta_y, ymax + delta_y)
+
+        self.Actualizar_puntos(nuevo_x, nuevo_y)
+
     def mover_mouse(self):
-        # punto = Point(event.xdata, event.ydata)
         seleccionado = world[world.geometry.intersects(self.punto_actual)]
 
         if not seleccionado.empty:
             nombre = seleccionado.iloc[0]["name"]
-
             if nombre != self.pais_actual:
                 self.pais_actual = nombre
                 self.actualizar_iluminacion(nombre)
-
         else:
             if self.pais_actual is not None:
                 self.pais_actual = None
                 self.actualizar_iluminacion()
 
-
     def Actualizar_puntos(self, x, y):
         self.punto_actual = Point(x, y)
-        self.marcador_mano.set_data([x], [y])  # Actualiza la posición del marcador de la mano
-        # Aquí podrías iniciar tu bucle de Pygame o cualquier otra lógica que necesites
-        # Conectar el evento de movimiento
-        print("actualizando puntos: ", x, "-", y)
+        self.marcador_mano.set_data([x], [y])
         self.mover_mouse()
 
-        # Guardamos en un bloque seguro por si la ventana se está moviendo
+        # Forzar la actualización visual inmediata del lienzo sin depender del estado idle
         try:
-            fig.canvas.draw_idle()
-            fig.canvas.flush_events()
+            fig.canvas.draw()
         except Exception:
-            pass # Evita que el programa muera si Windows bloquea el hilo gráfico
+            pass
