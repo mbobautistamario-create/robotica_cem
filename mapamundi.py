@@ -48,6 +48,13 @@ class Mapa():
         self.marcador_mano, = ax.plot([], [], 'ro', ms=10, zorder=5, label="Tu Mano")
 
         plt.show(block=False)
+        
+        # ─── NUEVO: Forzar ventana a pantalla completa (Maximizar en Windows) ───
+        try:
+            fig.canvas.manager.window.state('zoomed')
+        except Exception:
+            pass # Falla silenciosamente si se ejecuta en otro SO que no sea Windows
+            
         plt.pause(0.1)
 
     def actualizar_iluminacion(self, pais=None):
@@ -100,27 +107,29 @@ class Mapa():
             ax.set_ylim(cy - alto_nuevo / 2, cy + alto_nuevo / 2)
 
             try:
-                fig.canvas.draw() # Forzar dibujado inmediato
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events()
             except Exception:
                 pass
 
     def desplazar_punto(self, dx_pixeles, dy_pixeles, ancho_pantalla, alto_pantalla):
-        """
-        Mueve el punto Y desplaza la cámara (Pan) proporcionalmente al zoom actual.
-        """
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
 
         ancho_vista = xmax - xmin
         alto_vista = ymax - ymin
 
-        delta_x = (dx_pixeles / ancho_pantalla) * ancho_vista * 0.5
-        delta_y = -(dy_pixeles / alto_pantalla) * alto_vista * 0.5 # Invertido para eje Y
+        # ─── NUEVO: Sensibilidad dinámica según el nivel de Zoom ───
+        # Si vemos el planeta entero (360°), la velocidad es 0.5. 
+        # A medida que hacemos zoom, baja progresivamente hasta un tope de 0.1 para dar precisión.
+        sensibilidad = max(0.05, 0.5 * (ancho_vista / 360.0))
+
+        delta_x = (dx_pixeles / ancho_pantalla) * ancho_vista * sensibilidad
+        delta_y = -(dy_pixeles / alto_pantalla) * alto_vista * sensibilidad
 
         nuevo_x = self.punto_actual.x + delta_x
         nuevo_y = self.punto_actual.y + delta_y
 
-        # Si el mapa tiene zoom aplicado, desplazamos los límites de la cámara también
         if ancho_vista < 350.0:
             ax.set_xlim(xmin + delta_x, xmax + delta_x)
             ax.set_ylim(ymin + delta_y, ymax + delta_y)
@@ -145,8 +154,8 @@ class Mapa():
         self.marcador_mano.set_data([x], [y])
         self.mover_mouse()
 
-        # Forzar la actualización visual inmediata del lienzo sin depender del estado idle
         try:
-            fig.canvas.draw()
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
         except Exception:
             pass
