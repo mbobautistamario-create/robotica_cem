@@ -1,37 +1,57 @@
+import mysql.connector
+from sshtunnel import SSHTunnelForwarder
 
-import pymysql
+# Configuración del servidor SSH
+SSH_HOST = "ismdf.dynv6.net"
+SSH_PORT = 22
+SSH_USER = "alumno6to"
+SSH_PASSWORD = "Ismdf.309"  # O puedes usar ssh_pkey para claves privadas RSA/ED25519
 
-connection = pymysql.connect(
-    host='127.0.0.1', #192.168.0.250
-    #port=3306,
-    user='mortega907', #tmagnano549
-    password='mOrtega585$', #tMagnano221%
-    database='c_mundo_db'
-)
+# Configuración de la Base de Datos tal como la ve el servidor SSH
+DB_HOST_DESTINO = "127.0.0.1"     # O la IP privada de la BD vista desde el servidor SSH
+DB_PORT_DESTINO = 3306            # Puerto original de MySQL
+DB_NAME = "mortega907"
+DB_USER = "mortega907"
+DB_PASSWORD = "mOrtega585$"
 
-if connection is not None:
-    cur = connection.cursor()
+# --- 1. Crear y abrir el túnel SSH ---
+with SSHTunnelForwarder(
+    (SSH_HOST, SSH_PORT),
+    ssh_username=SSH_USER,
+    ssh_password=SSH_PASSWORD,
+    # Si usas clave RSA en lugar de contraseña:
+    # ssh_pkey="ruta/a/tu/id_rsa",
+    remote_bind_address=(DB_HOST_DESTINO, DB_PORT_DESTINO)
+) as server:
 
-    # CONSULTA SQL
-    sql = "SELECT * FROM PAIS"
+    print(f"¡Túnel SSH establecido con éxito!")
+    print(f"Puerto local asignado para la conexión: {server.local_bind_port}")
 
-    # EJECUCIÓN
-    cur.execute(sql)
+    # --- 2. Conectarse a la Base de Datos a través del túnel ---
+    try:
+        conexion = mysql.connector.connect(
+            host="127.0.0.1",                  # La conexión ahora apunta a tu propia máquina
+            port=server.local_bind_port,        # Usa el puerto local que abrió el túnel
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
 
-    # RECUPERAR FILAS
-    rows = cur.fetchall()
+        if conexion.is_connected():
+            cursor = conexion.cursor(dictionary=True)
+           
+            # Consulta de prueba
+            cursor.execute("SELECT * FROM elementos WHERE pais = %s", ("Argentina",))
+            resultados = cursor.fetchall()
+           
+            print("Datos obtenidos correctamente:")
+            for fila in resultados:
+                print(fila)
 
-    # CONFIRMAR
-    connection.commit()
+            cursor.close()
+            conexion.close()
 
-    # MOSTRAR RESULTADOS
-    print()
-    print("Toda la lista en una sola línea:")
-    print(rows)
+    except mysql.connector.Error as err:
+        print(f"Error en la consulta a la base de datos: {err}")
 
-    print()
-    print("Toda la lista en líneas separadas:")
-    for i in rows:
-        print(i)
-
-connection.close()
+# Al salir del bloque 'with', el túnel SSH se cierra automáticamente de forma segura.
