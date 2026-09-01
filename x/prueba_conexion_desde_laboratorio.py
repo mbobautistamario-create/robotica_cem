@@ -1,5 +1,13 @@
 import mysql.connector
 from sshtunnel import SSHTunnelForwarder
+import paramiko
+
+# Parche para compatibilidad entre Paramiko >= 3.0 y sshtunnel
+if not hasattr(paramiko, 'DSSKey'):
+    paramiko.DSSKey = paramiko.RSAKey
+
+from sshtunnel import SSHTunnelForwarder
+import mysql.connector
 
 # Configuración del servidor SSH
 SSH_HOST = "ismdf.dynv6.net"
@@ -10,7 +18,7 @@ SSH_PASSWORD = "Ismdf.309"  # O puedes usar ssh_pkey para claves privadas RSA/ED
 # Configuración de la Base de Datos tal como la ve el servidor SSH
 DB_HOST_DESTINO = "127.0.0.1"     # O la IP privada de la BD vista desde el servidor SSH
 DB_PORT_DESTINO = 3306            # Puerto original de MySQL
-DB_NAME = "mortega907"
+DB_NAME = "c_mundo_db"
 DB_USER = "mortega907"
 DB_PASSWORD = "mOrtega585$"
 
@@ -38,20 +46,20 @@ with SSHTunnelForwarder(
         )
 
         if conexion.is_connected():
-            cursor = conexion.cursor(dictionary=True)
-           
-            # Consulta de prueba
-            cursor.execute("SELECT * FROM elementos WHERE pais = %s", ("Argentina",))
-            resultados = cursor.fetchall()
-           
-            print("Datos obtenidos correctamente:")
-            for fila in resultados:
-                print(fila)
+                    cursor = conexion.cursor(dictionary=True)
+                    
+                    # Consulta SQL para seleccionar todos los datos de la tabla PAIS
+                    cursor.execute("SELECT * FROM PAIS")
+                    resultados = cursor.fetchall()
+                    
+                    print("\nDatos obtenidos de la tabla PAIS:")
+                    for fila in resultados:
+                        print(f"ID: {fila['ID_pais']} | Nombre: {fila['nombre']} | Imagen: {fila['imagen']}")
 
-            cursor.close()
-            conexion.close()
+                    cursor.close()
+                    conexion.close()
 
     except mysql.connector.Error as err:
         print(f"Error en la consulta a la base de datos: {err}")
-
+    
 # Al salir del bloque 'with', el túnel SSH se cierra automáticamente de forma segura.
