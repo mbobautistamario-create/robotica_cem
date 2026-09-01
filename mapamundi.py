@@ -4,6 +4,7 @@ matplotlib.use("TkAgg")  # Fuerza el backend seguro para hilos
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from matplotlib.collections import PolyCollection
+from pantalla_pais import PantallaPais  # Importar la nueva pantalla
 
 plt.ion()
 
@@ -43,19 +44,86 @@ class Mapa():
         self.punto_actual = Point(0, 0)
         self.pais_actual = None
         self.objeto_iluminacion = None 
+        self.pantalla_info_activa = False
 
-        # Marcador visual de la mano
-        self.marcador_mano, = ax.plot([], [], 'ro', ms=10, zorder=5, label="Tu Mano")
+        self.dibujar_mapa_base()
 
         plt.show(block=False)
-        
-        # ─── NUEVO: Forzar ventana a pantalla completa (Maximizar en Windows) ───
         try:
             fig.canvas.manager.window.state('zoomed')
         except Exception:
-            pass # Falla silenciosamente si se ejecuta en otro SO que no sea Windows
-            
+            pass
         plt.pause(0.1)
+
+    def dibujar_mapa_base(self):
+        global ax, texto_titulo
+        fig.clf()
+        fig.patch.set_facecolor('#f8f9fa')
+
+        ax = fig.add_subplot(111)
+        ax.set_facecolor('#ecf0f1')
+
+        world.plot(
+            ax=ax,
+            color="#2c3e50",
+            edgecolor="#34495e",
+            linewidth=0.6
+        )
+
+        ax.axis("off")
+        ax.set_autoscale_on(False)
+
+        texto_titulo = ax.text(
+            0.5, 0.98, "MAPA MUNDI INTERACTIVO NATIVO",
+            transform=ax.transAxes,
+            fontsize=11, color="#2c3e50", weight="bold",
+            ha="center", va="center"
+        )
+
+        self.marcador_mano, = ax.plot([self.punto_actual.x], [self.punto_actual.y], 'ro', ms=10, zorder=5)
+        self.objeto_iluminacion = None
+        self.pantalla_info_activa = False
+
+        try:
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+        except Exception:
+            pass
+
+    def abrir_pantalla_pais(self, nombre_pais=None, info=None):
+        pais = nombre_pais or self.pais_actual or "Selección actual"
+        self.pantalla_info_activa = True
+        
+        # Inicializa la pantalla de solapas reutilizando la figura existente
+        self.pantalla_pais = PantallaPais(
+            fig=fig,
+            nombre_pais=pais,
+            info=info,
+            callback_volver=self.dibujar_mapa_base
+        )
+
+    def Actualizar_puntos(self, x, y):
+        # Si la pantalla de información está abierta, no procesamos la posición del mapa
+        if self.pantalla_info_activa:
+            return
+
+        self.punto_actual = Point(x, y)
+        self.marcador_mano.set_data([x], [y])
+        self.mover_mouse()
+
+        try:
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+        except Exception:
+            pass
+
+    def Actualizar_cursor_info(self, norm_x, norm_y):
+        if self.pantalla_info_activa and hasattr(self, 'pantalla_pais'):
+            self.pantalla_pais.actualizar_cursor(norm_x, norm_y)
+
+    def Ejecutar_click_info(self):
+        if self.pantalla_info_activa and hasattr(self, 'pantalla_pais'):
+            self.pantalla_pais.ejecutar_click_gesto()
 
     def actualizar_iluminacion(self, pais=None):
         if self.objeto_iluminacion is not None:

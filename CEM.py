@@ -78,8 +78,9 @@ def Obtener_Posicion_Pixeles():
     posicion_en_camara = Posicion_mano(resultados)
     return (posicion_en_camara[0] * ANCHO, posicion_en_camara[1] * ALTO)
 
-def Entrar_Pais(pais):
-    print(f"Entrando al paquete {pais}")
+def Entrar_Pais(estado_punto, pais):
+    # Llama a la transición de solapas en la misma ventana
+    estado_punto.mapa.abrir_pantalla_pais()
 
 async def Ver_gestos(estado_punto):  
     global resultados
@@ -100,6 +101,27 @@ async def Ver_gestos(estado_punto):
         if resultados.multi_hand_landmarks:
             for hand_landmarks in resultados.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            
+            norm_x, norm_y = Posicion_mano(resultados)
+
+            # Si la pantalla de información está abierta:
+            if estado_punto.mapa.pantalla_info_activa:
+                estado_punto.mapa.Actualizar_cursor_info(norm_x, norm_y)
+
+                if Mano_cerrada(resultados):
+                    cv2.putText(image, "Click!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                    if not mano_cerrada:
+                        mano_cerrada = True
+                        estado_punto.mapa.Ejecutar_click_info()
+                else:
+                    mano_cerrada = False
+                
+                # Dibujar referencia en OpenCV y continuar al siguiente fotograma
+                cv2.circle(image, (int(norm_x * image.shape[1]), int(norm_y * image.shape[0])), 5, (0, 255, 255), 2)
+                cv2.imshow('Conoce el Mundo - Test IA', image)
+                if cv2.waitKey(1) & 0xFF == 27: break
+                await asyncio.sleep(0.01)
+                continue
 
             # 1. Gesto: Mano cerrada (Ingresar al País)
             if Mano_cerrada(resultados):
@@ -114,7 +136,7 @@ async def Ver_gestos(estado_punto):
                         print("Ingresando")
                         bandera_cerrada = time.time()
                         mano_cerrada = False
-                        Entrar_Pais(estado_punto.mapa.pais_actual)
+                        Entrar_Pais(estado_punto, estado_punto.mapa.pais_actual)
                 
             # 2. Gesto: Apretón (Mover / Arrastrar Alfiler)
             elif detectar_gesto(resultados):
