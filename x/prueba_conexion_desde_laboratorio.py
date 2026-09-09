@@ -47,15 +47,13 @@ with SSHTunnelForwarder(
 
         if conexion.is_connected():
                     cursor = conexion.cursor(dictionary=True)
-                    
-                    # Consulta SQL para seleccionar todos los datos de la tabla PAIS
-                    cursor.execute("SELECT * FROM PAIS")
+
+                    # Consulta SQL para mostrar las tablas
+                    cursor.execute("SHOW TABLES;")
                     resultados = cursor.fetchall()
                     
-                    print("\nDatos obtenidos de la tabla PAIS:")
-                    for fila in resultados:
-                        print(f"ID: {fila['ID_pais']} | Nombre: {fila['nombre']} | Imagen: {fila['imagen']}")
-
+                    print(resultados)
+                    
                     cursor.close()
                     conexion.close()
 
