@@ -1,63 +1,97 @@
-import mysql.connector
-from sshtunnel import SSHTunnelForwarder
 import paramiko
-
-# Parche para compatibilidad entre Paramiko >= 3.0 y sshtunnel
-if not hasattr(paramiko, 'DSSKey'):
-    paramiko.DSSKey = paramiko.RSAKey
-
 from sshtunnel import SSHTunnelForwarder
 import mysql.connector
 
-# Configuración del servidor SSH
-SSH_HOST = "ismdf.dynv6.net"
-SSH_PORT = 22
-SSH_USER = "alumno6to"
-SSH_PASSWORD = "Ismdf.309"  # O puedes usar ssh_pkey para claves privadas RSA/ED25519
+def main():
+    # Parche para compatibilidad entre Paramiko >= 3.0 y sshtunnel
+    if not hasattr(paramiko, 'DSSKey'):
+        paramiko.DSSKey = paramiko.RSAKey
 
-# Configuración de la Base de Datos tal como la ve el servidor SSH
-DB_HOST_DESTINO = "127.0.0.1"     # O la IP privada de la BD vista desde el servidor SSH
-DB_PORT_DESTINO = 3306            # Puerto original de MySQL
-DB_NAME = "c_mundo_db"
-DB_USER = "mortega907"
-DB_PASSWORD = "mOrtega585$"
+    # Configuración del servidor SSH
+    #SSH_HOST = "ismdf.dynv6.net"
+    SSH_HOST = "181.104.24.24"
+    SSH_PORT = 22
+    SSH_USER = "alumno6to"
+    SSH_PASSWORD = "Ismdf.309"
 
-# --- 1. Crear y abrir el túnel SSH ---
-with SSHTunnelForwarder(
-    (SSH_HOST, SSH_PORT),
-    ssh_username=SSH_USER,
-    ssh_password=SSH_PASSWORD,
-    # Si usas clave RSA en lugar de contraseña:
-    # ssh_pkey="ruta/a/tu/id_rsa",
-    remote_bind_address=(DB_HOST_DESTINO, DB_PORT_DESTINO)
-) as server:
+    # Configuración de la Base de Datos
+    DB_HOST_DESTINO = "127.0.0.1"
+    DB_PORT_DESTINO = 3306
+    DB_NAME = "c_mundo_db"
+    DB_USER = "mortega907"
+    DB_PASSWORD = "mOrtega585$"
 
-    print(f"¡Túnel SSH establecido con éxito!")
-    print(f"Puerto local asignado para la conexión: {server.local_bind_port}")
+    # 1. Crear y abrir el túnel SSH
+    with SSHTunnelForwarder(
+        (SSH_HOST, SSH_PORT),
+        ssh_username=SSH_USER,
+        ssh_password=SSH_PASSWORD,
+        remote_bind_address=(DB_HOST_DESTINO, DB_PORT_DESTINO)
+    ) as server:
 
-    # --- 2. Conectarse a la Base de Datos a través del túnel ---
-    try:
-        conexion = mysql.connector.connect(
-            host="127.0.0.1",                  # La conexión ahora apunta a tu propia máquina
-            port=server.local_bind_port,        # Usa el puerto local que abrió el túnel
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME
-        )
+        print(f"¡Túnel SSH establecido con éxito!")
 
-        if conexion.is_connected():
+        try:
+            # 2. Conexión a la Base de Datos
+            conexion = mysql.connector.connect(
+                host="127.0.0.1",
+                port=server.local_bind_port,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                database=DB_NAME
+            )
+
+            if conexion.is_connected():
+                cursor = conexion.cursor()
+
+                # --- PASO A: Obtenemos y mostramos la lista de tablas ---
+                cursor.execute("SHOW TABLES;")
+                tablas_raw = cursor.fetchall()
+                
+                # Extraemos los nombres de las tablas en una lista simple
+                tablas = [t[0] for t in tablas_raw]
+
+                print("\n========================================")
+                print(f" Tablas disponibles en '{DB_NAME}':")
+                print("========================================")
+                for i, nombre_tabla in enumerate(tablas, 1):
+                    print(f"  [{i}] {nombre_tabla}")
+
+                # --- PASO B: Selección interactiva de la tabla ---
+                opcion = input("\nIngresa el número o el nombre de la tabla que deseas abrir: ").strip()
+
+                tabla_seleccionada = None
+                if opcion.isdigit():
+                    indice = int(opcion) - 1
+                    if 0 <= indice < len(tablas):
+                        tabla_seleccionada = tablas[indice]
+                elif opcion in tablas:
+                    tabla_seleccionada = opcion
+
+                # --- PASO C: Mostrar el contenido de la tabla seleccionada ---
+                if tabla_seleccionada:
+                    # Usamos dictionary=True para ver las columnas con sus nombres
+                    cursor.close()
                     cursor = conexion.cursor(dictionary=True)
 
-                    # Consulta SQL para mostrar las tablas
-                    cursor.execute("SHOW TABLES;")
-                    resultados = cursor.fetchall()
-                    
-                    print(resultados)
-                    
-                    cursor.close()
-                    conexion.close()
+                    print(f"\nObteniendo datos de la tabla '{tabla_seleccionada}'...")
+                    cursor.execute(f"SELECT * FROM `{tabla_seleccionada}` LIMIT 50;")
+                    registros = cursor.fetchall()
 
-    except mysql.connector.Error as err:
-        print(f"Error en la consulta a la base de datos: {err}")
-    
-# Al salir del bloque 'with', el túnel SSH se cierra automáticamente de forma segura.
+                    print(f"\n--- Contenido de '{tabla_seleccionada}' (máx. 50 registros) ---")
+                    if registros:
+                        for fila in registros:
+                            print(fila)
+                    else:
+                        print("La tabla está vacía.")
+                else:
+                    print("\nSelección no válida. Operación cancelada.")
+
+                cursor.close()
+                conexion.close()
+
+        except mysql.connector.Error as err:
+            print(f"\nError en la base de datos: {err}")
+
+if __name__ == "__main__":
+    main()
