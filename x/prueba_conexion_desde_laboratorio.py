@@ -15,8 +15,8 @@ def main():
         paramiko.DSSKey = paramiko.RSAKey
 
     # Configuración del servidor SSH
-    #SSH_HOST = "ismdf.dynv6.net"
-    SSH_HOST = "181.104.24.24"
+    SSH_HOST = "ismdf.dynv6.net"
+    #SSH_HOST = "181.104.24.24"
     SSH_PORT = 22
     SSH_USER = "alumno6to"
     SSH_PASSWORD = "Ismdf.309"
