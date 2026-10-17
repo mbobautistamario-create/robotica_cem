@@ -6,6 +6,7 @@ from shapely.geometry import Point
 from matplotlib.collections import PolyCollection
 from matplotlib.gridspec import GridSpec
 from pantalla_pais import PantallaPais  
+from gestor_datos import GestorDatosPais
 
 plt.ion()
 
@@ -18,6 +19,12 @@ class Mapa():
         self.pais_actual = None
         self.objeto_iluminacion = None 
         self.pantalla_info_activa = False
+
+        # Instanciamos el conector a la "Base de Datos"
+        self.gestor_db = GestorDatosPais()
+
+        self.fig = plt.figure(figsize=(16, 8))
+        self.fig.patch.set_facecolor('#1e272e')
 
         self.fig = plt.figure(figsize=(16, 8))
         self.fig.patch.set_facecolor('#1e272e')
@@ -88,14 +95,31 @@ class Mapa():
             self.img_camara.set_extent((0, frame_rgb.shape[1], frame_rgb.shape[0], 0))
 
     def abrir_pantalla_pais(self, nombre_pais=None, info=None):
-        pais = nombre_pais or self.pais_actual or "Selección actual"
+        pais_geojson = nombre_pais or self.pais_actual
+        if not pais_geojson: return # Proteccion por si se hace click en el océano
+        
         self.pantalla_info_activa = True
         
         self.ax_mapa.set_visible(False)
         self.ax_cam.set_visible(False)
         self.ax_gestos.set_visible(False)
 
-        self.pantalla_pais = PantallaPais(fig=self.fig, nombre_pais=pais, info=info, callback_volver=self.restaurar_mapa)
+        # ─── APLICAMOS LA TRADUCCIÓN AQUÍ ───
+        # Traducimos el país para que se vea en español en el título de la pantalla UI
+        pais_espanol = self.gestor_db.traducir_nombre(pais_geojson)
+
+        if info is None:
+            # Mandamos a buscar el país a la base de datos
+            info_bd = self.gestor_db.obtener_info_pais(pais_geojson)
+        else:
+            info_bd = info
+
+        self.pantalla_pais = PantallaPais(
+            fig=self.fig, 
+            nombre_pais=pais_espanol,  # Le pasamos el español a la interfaz visual
+            info=info_bd, 
+            callback_volver=self.restaurar_mapa
+        )
 
     def restaurar_mapa(self):
         self.pantalla_info_activa = False

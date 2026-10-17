@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
+import numpy as np
 
 class PantallaPais:
     def __init__(self, fig, nombre_pais="País Desconocido", info=None, callback_volver=None):
@@ -7,43 +8,50 @@ class PantallaPais:
         self.nombre_pais = nombre_pais
         self.callback_volver = callback_volver
         
+        # Estructura por defecto si falla la carga
         self.info = info or {
-            "general": f"Información general sobre {nombre_pais}.\n\nAquí puedes colocar datos históricos o un resumen introductorio.",
-            "cultura": "• Idioma oficial: -\n• Capital: -\n• Moneda: -\n• Costumbres destacadas.",
-            "datos": "• Población estimada: -\n• Superficie total: -\n• Continente: -\n• Datos económicos relevantes."
+            "general": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
+            "cultura": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
+            "datos": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)}
         }
         
         self.pestana_activa = 0
         self.botones = []
         self.botones_bbox = []  
-        self.elementos_ui = [] # Rastrea todos los ejes creados para eliminarlos al volver
+        self.elementos_ui = [] 
         
         self.construir_interfaz()
 
     def construir_interfaz(self):
-        # Título principal
-        titulo = self.fig.text(
-            0.5, 0.93, f"PAÍS: {self.nombre_pais.upper()}",
-            fontsize=20, weight="bold", color="#f5f6fa",
+        self.fig.patch.set_facecolor('#1e272e')
+
+        self.ax_header = self.fig.add_axes([0.15, 0.88, 0.70, 0.08])
+        self.ax_header.set_facecolor('#2f3640')
+        self.ax_header.axis("off")
+        self.elementos_ui.append(self.ax_header)
+
+        titulo = self.ax_header.text(
+            0.5, 0.5, f"INFORMACIÓN DETALLADA: {self.nombre_pais.upper()}",
+            fontsize=18, weight="heavy", color="#f1c40f",
             ha="center", va="center"
         )
         self.elementos_ui.append(titulo)
 
-        nombres_pestanas = ["General", "Geografía & Cultura", "Datos & Economía"]
+        nombres_pestanas = ["General e Historia", "Gastronomía Típica", "Puntos de Turismo"]
         posiciones_x = [0.15, 0.40, 0.65]
         ancho_btn = 0.20
         alto_btn = 0.045
         
         for idx, nombre in enumerate(nombres_pestanas):
-            rect = [posiciones_x[idx], 0.83, ancho_btn, alto_btn]
+            rect = [posiciones_x[idx], 0.80, ancho_btn, alto_btn]
             ax_btn = self.fig.add_axes(rect)
             self.elementos_ui.append(ax_btn)
 
-            color_fondo = '#e67e22' if idx == self.pestana_activa else '#34495e'
-            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#d35400')
+            color_fondo = '#00a8ff' if idx == self.pestana_activa else '#353b48'
+            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#0097e6')
             btn.label.set_color('white')
             btn.label.set_weight('bold')
-            btn.label.set_fontsize(10)
+            btn.label.set_fontsize(11)
             
             btn.on_clicked(lambda event, i=idx: self.cambiar_pestana(i))
             self.botones.append(btn)
@@ -53,12 +61,32 @@ class PantallaPais:
                 "x_max": rect[0] + rect[2], "y_max": rect[1] + rect[3]
             })
 
-        # Botón volver
-        rect_volver = [0.40, 0.08, 0.20, 0.045]
+        # --- SECCIÓN DE CONTENIDO DIVIDIDA (IMAGEN IZQ / TEXTO DER) ---
+        
+        # Eje para la Imagen
+        self.ax_imagen = self.fig.add_axes([0.15, 0.20, 0.33, 0.55])
+        self.ax_imagen.axis("off")
+        self.visor_imagen = self.ax_imagen.imshow(np.zeros((100, 100, 3), dtype=np.uint8))
+        self.elementos_ui.append(self.ax_imagen)
+
+        # Eje para el Texto
+        self.ax_texto = self.fig.add_axes([0.50, 0.20, 0.35, 0.55])
+        self.ax_texto.set_facecolor('#2f3640')
+        self.ax_texto.axis("off")
+        self.texto_cuerpo = self.ax_texto.text(
+            0.05, 0.95, "",
+            fontsize=13, color="#f5f6fa",
+            va="top", ha="left", wrap=True, linespacing=1.6
+        )
+        self.elementos_ui.append(self.ax_texto)
+
+        # -------------------------------------------------------------
+
+        rect_volver = [0.40, 0.08, 0.20, 0.05]
         ax_volver = self.fig.add_axes(rect_volver)
         self.elementos_ui.append(ax_volver)
 
-        self.btn_volver = Button(ax_volver, "← Volver al Mapa", color='#c0392b', hovercolor='#e74c3c')
+        self.btn_volver = Button(ax_volver, "← RETORNAR AL MAPAMUNDI", color='#e84118', hovercolor='#c23616')
         self.btn_volver.label.set_color('white')
         self.btn_volver.label.set_weight('bold')
         self.btn_volver.on_clicked(self.volver_al_mapa)
@@ -69,24 +97,11 @@ class PantallaPais:
             "x_max": rect_volver[0] + rect_volver[2], "y_max": rect_volver[1] + rect_volver[3]
         })
 
-        # Área de contenido
-        self.ax_contenido = self.fig.add_axes([0.15, 0.18, 0.70, 0.60])
-        self.ax_contenido.set_facecolor('#2f3640')
-        self.ax_contenido.axis("off")
-        self.elementos_ui.append(self.ax_contenido)
-
-        self.texto_cuerpo = self.ax_contenido.text(
-            0.05, 0.90, "",
-            fontsize=13, color="#dcdde1",
-            va="top", ha="left", wrap=True
-        )
-
-        # Cursor de la mano transparente
         self.ax_cursor = self.fig.add_axes([0, 0, 1, 1], zorder=10)
         self.ax_cursor.axis("off")
         self.ax_cursor.set_xlim(0, 1)
         self.ax_cursor.set_ylim(0, 1)
-        self.marcador_mano, = self.ax_cursor.plot([], [], 'o', color='#00ffcc', ms=12, markeredgecolor='white', markeredgewidth=1.5)
+        self.marcador_mano, = self.ax_cursor.plot([], [], 'o', color='#00ffcc', ms=14, markeredgecolor='white', markeredgewidth=2)
         self.elementos_ui.append(self.ax_cursor)
 
         self.pos_mano_norm = (0.5, 0.5)
@@ -94,17 +109,24 @@ class PantallaPais:
 
     def mostrar_contenido(self):
         for idx, btn in enumerate(self.botones):
-            color = '#e67e22' if idx == self.pestana_activa else '#34495e'
+            color = '#00a8ff' if idx == self.pestana_activa else '#353b48'
             btn.ax.set_facecolor(color)
 
         if self.pestana_activa == 0:
-            texto = self.info.get("general", "")
+            datos_tab = self.info.get("general", {})
         elif self.pestana_activa == 1:
-            texto = self.info.get("cultura", "")
+            datos_tab = self.info.get("cultura", {})
         else:
-            texto = self.info.get("datos", "")
+            datos_tab = self.info.get("datos", {})
 
-        self.texto_cuerpo.set_text(texto)
+        # Actualizamos el texto
+        self.texto_cuerpo.set_text(datos_tab.get("texto", ""))
+        
+        # Actualizamos la imagen y reescalamos los bordes
+        img_array = datos_tab.get("imagen", np.zeros((10,10,3), dtype=np.uint8))
+        self.visor_imagen.set_data(img_array)
+        self.visor_imagen.set_extent((0, img_array.shape[1], img_array.shape[0], 0))
+
         try:
             self.fig.canvas.draw_idle()
         except Exception:
