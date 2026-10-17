@@ -120,9 +120,9 @@ class GestorDatosPais:
             return self.cache_paises[nombre_es]
 
         info = {
-            "general": {"texto": f"Datos no disponibles para {nombre_es}.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
-            "cultura": {"texto": "Gastronomía no disponible.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
-            "datos": {"texto": "Turismo no disponible.", "imagen": np.zeros((10,10,3), dtype=np.uint8)}
+            "general": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
+            "cultura": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
+            "datos": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)}
         }
 
         if not self.conexion or not self.conexion.is_connected():
@@ -130,14 +130,13 @@ class GestorDatosPais:
 
         try:
             cursor = self.conexion.cursor(dictionary=True)
-            
             cursor.execute("SELECT ID_pais FROM PAIS WHERE nombre = %s LIMIT 1;", (nombre_es,))
             pais_db = cursor.fetchone()
             
             if pais_db:
                 id_pais = pais_db['ID_pais']
 
-                # Consulta GENERAL
+                # ─── 1. GENERAL ───
                 cursor.execute("SELECT descripcion, historia, relieve, imagen FROM GENERAL WHERE ID_pais = %s LIMIT 1;", (id_pais,))
                 general = cursor.fetchone()
                 if not general: 
@@ -145,22 +144,58 @@ class GestorDatosPais:
                     general = cursor.fetchone()
 
                 if general:
-                    texto_gen = f"{general.get('descripcion', '')}\n\nHistoria:\n{general.get('historia', '')}\n\nRelieve:\n{general.get('relieve', '')}"
-                    # Pasamos la ruta de la BD al nuevo método de carga local
-                    info["general"] = {"texto": texto_gen, "imagen": self.cargar_imagen_local(general.get('imagen'))}
+                    desc_cruda = general.get('descripcion', '')
+                    subtitulo = desc_cruda.split('-', 1)[1].strip() if '-' in desc_cruda else desc_cruda
+                    cuerpo_gen = f"■ HISTORIA:\n{general.get('historia', '')}\n\n■ RELIEVE:\n{general.get('relieve', '')}"
+                    
+                    info["general"] = {
+                        "titulo": "Resumen Geopolítico",
+                        "subtitulo": subtitulo,
+                        "cuerpo": cuerpo_gen,
+                        "imagen": self.cargar_imagen_local(general.get('imagen'))
+                    }
 
-                # Consulta GASTRONOMIA
+                # ─── 2. CULTURA (GASTRONOMÍA) ───
                 cursor.execute("SELECT descripcion, imagen FROM GASTRONOMIA WHERE ID_pais = %s LIMIT 1;", (id_pais,))
                 gastro = cursor.fetchone()
                 if gastro:
-                    info["cultura"] = {"texto": gastro.get('descripcion', ''), "imagen": self.cargar_imagen_local(gastro.get('imagen'))}
+                    desc_cruda = gastro.get('descripcion', '')
+                    # Separador inteligente para extraer "Argentina - Asado: Carne..." -> "Asado"
+                    if '-' in desc_cruda and ':' in desc_cruda:
+                        partes = desc_cruda.split('-', 1)[1].split(':', 1)
+                        plato = partes[0].strip()
+                        receta = partes[1].strip()
+                    else:
+                        plato = "Plato Tradicional"
+                        receta = desc_cruda
 
-                # Consulta TURISMO
+                    info["cultura"] = {
+                        "titulo": "Gastronomía Regional",
+                        "subtitulo": f"Plato Destacado: {plato}",
+                        "cuerpo": receta,
+                        "imagen": self.cargar_imagen_local(gastro.get('imagen'))
+                    }
+
+                # ─── 3. TURISMO ───
                 cursor.execute("SELECT descripcion, cant_lugares, imagen FROM TURISMO WHERE id_pais = %s LIMIT 1;", (id_pais,))
                 turismo = cursor.fetchone()
                 if turismo:
-                    texto_tur = f"{turismo.get('descripcion', '')}\n\nLugares disponibles para visitar: {turismo.get('cant_lugares', 0)}"
-                    info["datos"] = {"texto": texto_tur, "imagen": self.cargar_imagen_local(turismo.get('imagen'))}
+                    desc_cruda = turismo.get('descripcion', '')
+                    if '-' in desc_cruda and ':' in desc_cruda:
+                        lugar = desc_cruda.split('-', 1)[1].split(':', 1)
+                        nombre_lugar = lugar[0].strip()
+                        desc_lugar = lugar[1].strip()
+                    else:
+                        nombre_lugar = "Punto de Interés"
+                        desc_lugar = desc_cruda
+
+                    cuerpo_tur = f"{desc_lugar}\n\n► Destinos catalogados en el país: {turismo.get('cant_lugares', 0)}"
+                    info["datos"] = {
+                        "titulo": "Turismo y Exploración",
+                        "subtitulo": f"Destino Principal: {nombre_lugar}",
+                        "cuerpo": cuerpo_tur,
+                        "imagen": self.cargar_imagen_local(turismo.get('imagen'))
+                    }
 
             cursor.close()
             self.cache_paises[nombre_es] = info

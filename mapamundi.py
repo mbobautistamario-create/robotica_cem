@@ -75,7 +75,7 @@ class Mapa():
         self.texto_titulo = self.ax_mapa.text(
             0.5, 0.98, "MAPA MUNDI INTERACTIVO NATIVO",
             transform=self.ax_mapa.transAxes,
-            fontsize=12, color="#2c3e50", weight="bold", ha="center", va="center"
+            fontsize=12, color="#aa41ff", weight="bold", ha="center", va="center"
         )
 
         # Ubicar el punto fijo exactamente en el centro de la vista

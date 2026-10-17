@@ -7,13 +7,7 @@ class PantallaPais:
         self.fig = fig
         self.nombre_pais = nombre_pais
         self.callback_volver = callback_volver
-        
-        # Estructura por defecto si falla la carga
-        self.info = info or {
-            "general": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
-            "cultura": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
-            "datos": {"texto": "Cargando...", "imagen": np.zeros((10,10,3), dtype=np.uint8)}
-        }
+        self.info = info or {}
         
         self.pestana_activa = 0
         self.botones = []
@@ -25,30 +19,32 @@ class PantallaPais:
     def construir_interfaz(self):
         self.fig.patch.set_facecolor('#1e272e')
 
-        self.ax_header = self.fig.add_axes([0.15, 0.88, 0.70, 0.08])
-        self.ax_header.set_facecolor('#2f3640')
+        # ─── 1. EL GRAN TÍTULO DEL PAÍS (Arriba de todo) ───
+        self.ax_header = self.fig.add_axes([0.10, 0.88, 0.80, 0.08])
         self.ax_header.axis("off")
         self.elementos_ui.append(self.ax_header)
 
-        titulo = self.ax_header.text(
-            0.5, 0.5, f"INFORMACIÓN DETALLADA: {self.nombre_pais.upper()}",
-            fontsize=18, weight="heavy", color="#f1c40f",
+        titulo_principal = self.ax_header.text(
+            0.5, 0.5, f" 🌍  {self.nombre_pais.upper()}  🌍 ",
+            fontsize=26, weight="black", color="#ffffff",
             ha="center", va="center"
         )
-        self.elementos_ui.append(titulo)
+        self.elementos_ui.append(titulo_principal)
 
-        nombres_pestanas = ["General e Historia", "Gastronomía Típica", "Puntos de Turismo"]
-        posiciones_x = [0.15, 0.40, 0.65]
+        # ─── 2. LOS BOTONES DE NAVEGACIÓN ───
+        nombres_pestanas = ["Resumen General", "Gastronomía Típica", "Guía de Turismo"]
+        # Distribuimos los botones para que ocupen todo el ancho simétricamente
+        posiciones_x = [0.10, 0.40, 0.70]
         ancho_btn = 0.20
-        alto_btn = 0.045
+        alto_btn = 0.04
         
         for idx, nombre in enumerate(nombres_pestanas):
-            rect = [posiciones_x[idx], 0.80, ancho_btn, alto_btn]
+            rect = [posiciones_x[idx], 0.82, ancho_btn, alto_btn]
             ax_btn = self.fig.add_axes(rect)
             self.elementos_ui.append(ax_btn)
 
-            color_fondo = '#00a8ff' if idx == self.pestana_activa else '#353b48'
-            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#0097e6')
+            color_fondo = '#0984e3' if idx == self.pestana_activa else '#2d3436'
+            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#74b9ff')
             btn.label.set_color('white')
             btn.label.set_weight('bold')
             btn.label.set_fontsize(11)
@@ -61,32 +57,36 @@ class PantallaPais:
                 "x_max": rect[0] + rect[2], "y_max": rect[1] + rect[3]
             })
 
-        # --- SECCIÓN DE CONTENIDO DIVIDIDA (IMAGEN IZQ / TEXTO DER) ---
-        
-        # Eje para la Imagen
-        self.ax_imagen = self.fig.add_axes([0.15, 0.20, 0.33, 0.55])
+        # ─── 3. PANEL DE IMAGEN (Mitad Izquierda Exacta) ───
+        self.ax_imagen = self.fig.add_axes([0.10, 0.15, 0.40, 0.62])
         self.ax_imagen.axis("off")
-        self.visor_imagen = self.ax_imagen.imshow(np.zeros((100, 100, 3), dtype=np.uint8))
+        # CLAVE: aspect='auto' fuerza a la imagen a llenar el 100% de la caja asignada
+        self.visor_imagen = self.ax_imagen.imshow(np.zeros((100, 100, 3), dtype=np.uint8), aspect='auto')
         self.elementos_ui.append(self.ax_imagen)
 
-        # Eje para el Texto
-        self.ax_texto = self.fig.add_axes([0.50, 0.20, 0.35, 0.55])
-        self.ax_texto.set_facecolor('#2f3640')
+        # ─── 4. PANEL DE INFORMACIÓN ESTRUCTURADA (Mitad Derecha Exacta) ───
+        self.ax_texto = self.fig.add_axes([0.55, 0.15, 0.35, 0.62])
+        self.ax_texto.set_facecolor('#2d3436')
         self.ax_texto.axis("off")
-        self.texto_cuerpo = self.ax_texto.text(
-            0.05, 0.95, "",
-            fontsize=13, color="#f5f6fa",
-            va="top", ha="left", wrap=True, linespacing=1.6
-        )
+        
+        for spine in self.ax_texto.spines.values():
+            spine.set_visible(True)
+            spine.set_color('#0984e3')
+            spine.set_linewidth(1.5)
         self.elementos_ui.append(self.ax_texto)
 
-        # -------------------------------------------------------------
+        self.ui_titulo = self.ax_texto.text(0.05, 0.94, "", fontsize=15, weight="bold", color="#fdcb6e", va="top")
+        self.ui_subtit = self.ax_texto.text(0.05, 0.85, "", fontsize=12, style="italic", color="#74b9ff", va="top", wrap=True)
+        self.ui_cuerpo = self.ax_texto.text(0.05, 0.70, "", fontsize=12, color="#dfe6e9", va="top", wrap=True, linespacing=1.7)
+        
+        self.elementos_ui.extend([self.ui_titulo, self.ui_subtit, self.ui_cuerpo])
 
-        rect_volver = [0.40, 0.08, 0.20, 0.05]
+        # ─── 5. BOTÓN VOLVER ───
+        rect_volver = [0.40, 0.06, 0.20, 0.045]
         ax_volver = self.fig.add_axes(rect_volver)
         self.elementos_ui.append(ax_volver)
 
-        self.btn_volver = Button(ax_volver, "← RETORNAR AL MAPAMUNDI", color='#e84118', hovercolor='#c23616')
+        self.btn_volver = Button(ax_volver, "← VOLVER AL MAPA", color='#d63031', hovercolor='#ff7675')
         self.btn_volver.label.set_color('white')
         self.btn_volver.label.set_weight('bold')
         self.btn_volver.on_clicked(self.volver_al_mapa)
@@ -97,6 +97,7 @@ class PantallaPais:
             "x_max": rect_volver[0] + rect_volver[2], "y_max": rect_volver[1] + rect_volver[3]
         })
 
+        # Cursor Gestual
         self.ax_cursor = self.fig.add_axes([0, 0, 1, 1], zorder=10)
         self.ax_cursor.axis("off")
         self.ax_cursor.set_xlim(0, 1)
@@ -109,7 +110,7 @@ class PantallaPais:
 
     def mostrar_contenido(self):
         for idx, btn in enumerate(self.botones):
-            color = '#00a8ff' if idx == self.pestana_activa else '#353b48'
+            color = '#0984e3' if idx == self.pestana_activa else '#2d3436'
             btn.ax.set_facecolor(color)
 
         if self.pestana_activa == 0:
@@ -119,11 +120,12 @@ class PantallaPais:
         else:
             datos_tab = self.info.get("datos", {})
 
-        # Actualizamos el texto
-        self.texto_cuerpo.set_text(datos_tab.get("texto", ""))
+        self.ui_titulo.set_text(datos_tab.get("titulo", "Sin Título"))
+        self.ui_subtit.set_text(datos_tab.get("subtitulo", "Subtítulo no encontrado"))
+        self.ui_cuerpo.set_text(datos_tab.get("cuerpo", "Descripción no disponible en la base de datos."))
         
-        # Actualizamos la imagen y reescalamos los bordes
-        img_array = datos_tab.get("imagen", np.zeros((10,10,3), dtype=np.uint8))
+        # Renderizar la imagen llenando la caja asignada
+        img_array = datos_tab.get("imagen", np.full((300, 400, 3), 80, dtype=np.uint8))
         self.visor_imagen.set_data(img_array)
         self.visor_imagen.set_extent((0, img_array.shape[1], img_array.shape[0], 0))
 
