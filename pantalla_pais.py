@@ -1,3 +1,4 @@
+import time  # <--- NUEVO IMPORT
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Button
@@ -15,108 +16,101 @@ class PantallaPais:
         self.botones_bbox = []  
         self.elementos_ui = [] 
         
+        # ─── VARIABLES PARA EL CLIC POR TIEMPO (DWELL CLICK) ───
+        self.boton_hover_actual = None
+        self.tiempo_inicio_hover = 0
+        
         self.construir_interfaz()
 
     def construir_interfaz(self):
         self.fig.patch.set_facecolor('#1e272e')
 
-        # ─── 1. EL GRAN TÍTULO DEL PAÍS (HEADER ESTILO WEB) ───
-        self.ax_header = self.fig.add_axes([0.10, 0.88, 0.80, 0.08])
-        self.ax_header.axis("off")
+        # Barra lateral
+        self.ax_sidebar_bg = self.fig.add_axes([0.03, 0.05, 0.22, 0.90])
+        self.ax_sidebar_bg.set_facecolor('#2d3436')
+        self.ax_sidebar_bg.axis("off")
+        self.elementos_ui.append(self.ax_sidebar_bg)
+
+        # Recuadro Título Superior
+        self.ax_title_img = self.fig.add_axes([0.03, 0.65, 0.22, 0.30])
+        self.ax_title_img.axis("off")
         
-        # Renderizamos la imagen de la tabla PAIS como fondo
         img_header = self.info.get("header_img", np.full((100, 100, 3), 40, dtype=np.uint8))
-        self.ax_header.imshow(img_header, aspect='auto')
-        
-        # Filtro oscuro semitransparente (alpha=0.5) para asegurar que el texto sea legible
-        self.ax_header.add_patch(patches.Rectangle((0, 0), 1, 1, transform=self.ax_header.transAxes, color='black', alpha=0.5))
+        self.ax_title_img.imshow(img_header, aspect='auto') 
+        self.ax_title_img.add_patch(patches.Rectangle((0, 0), 1, 1, transform=self.ax_title_img.transAxes, color='black', alpha=0.55))
 
-        # Texto centrado usando coordenadas relativas al recuadro (transAxes)
-        titulo_principal = self.ax_header.text(
-            0.5, 0.5, f" 🌍  {self.nombre_pais.upper()}  🌍 ",
+        nombre_vertical = self.nombre_pais.upper().replace(" ", "\n")
+        titulo_principal = self.ax_title_img.text(
+            0.5, 0.5, nombre_vertical,
             fontsize=26, weight="black", color="#ffffff",
-            ha="center", va="center", transform=self.ax_header.transAxes
+            ha="center", va="center", transform=self.ax_title_img.transAxes
         )
-        self.elementos_ui.append(self.ax_header)
+        self.elementos_ui.extend([self.ax_title_img, titulo_principal])
 
-        # ─── 2. LOS BOTONES DE NAVEGACIÓN ───
-        nombres_pestanas = ["Resumen General", "Gastronomía Típica", "Guía de Turismo"]
-        posiciones_x = [0.10, 0.40, 0.70]
-        ancho_btn = 0.20
-        alto_btn = 0.04
-        
-        for idx, nombre in enumerate(nombres_pestanas):
-            rect = [posiciones_x[idx], 0.82, ancho_btn, alto_btn]
-            ax_btn = self.fig.add_axes(rect)
-            self.elementos_ui.append(ax_btn)
-
-            color_fondo = '#0984e3' if idx == self.pestana_activa else '#2d3436'
-            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#74b9ff')
-            btn.label.set_color('white')
-            btn.label.set_weight('bold')
-            btn.label.set_fontsize(11)
-            
-            btn.on_clicked(lambda event, i=idx: self.cambiar_pestana(i))
-            self.botones.append(btn)
-            self.botones_bbox.append({
-                "tipo": "pestana", "indice": idx,
-                "x_min": rect[0], "y_min": rect[1],
-                "x_max": rect[0] + rect[2], "y_max": rect[1] + rect[3]
-            })
-
-        # ─── 3. PANEL DE IMAGEN DE CONTENIDO ───
-        self.ax_imagen = self.fig.add_axes([0.10, 0.15, 0.40, 0.62])
-        self.ax_imagen.axis("off")
-        self.visor_imagen = self.ax_imagen.imshow(np.zeros((100, 100, 3), dtype=np.uint8), aspect='auto')
-        self.elementos_ui.append(self.ax_imagen)
-
-        # ─── 4. PANEL DE INFORMACIÓN ESTRUCTURADA ───
-        self.ax_texto = self.fig.add_axes([0.55, 0.15, 0.35, 0.62])
-        self.ax_texto.set_facecolor('#2d3436')
-        self.ax_texto.axis("off")
-        
-        for spine in self.ax_texto.spines.values():
-            spine.set_visible(True)
-            spine.set_color('#0984e3')
-            spine.set_linewidth(1.5)
-        self.elementos_ui.append(self.ax_texto)
-
-        self.ui_titulo = self.ax_texto.text(0.05, 0.94, "", fontsize=15, weight="bold", color="#fdcb6e", va="top")
-        self.ui_subtit = self.ax_texto.text(0.05, 0.85, "", fontsize=12, style="italic", color="#74b9ff", va="top", wrap=True)
-        self.ui_cuerpo = self.ax_texto.text(0.05, 0.70, "", fontsize=12, color="#dfe6e9", va="top", wrap=True, linespacing=1.7)
-        
-        self.elementos_ui.extend([self.ui_titulo, self.ui_subtit, self.ui_cuerpo])
-
-        # ─── 5. BOTÓN VOLVER ───
-        rect_volver = [0.40, 0.06, 0.20, 0.045]
+        # Botón Volver
+        rect_volver = [0.04, 0.08, 0.20, 0.05]
         ax_volver = self.fig.add_axes(rect_volver)
         self.elementos_ui.append(ax_volver)
-
-        self.btn_volver = Button(ax_volver, "← VOLVER AL MAPA", color='#d63031', hovercolor='#ff7675')
+        self.btn_volver = Button(ax_volver, "← SALIR", color='#d63031', hovercolor='#ff7675')
         self.btn_volver.label.set_color('white')
         self.btn_volver.label.set_weight('bold')
         self.btn_volver.on_clicked(self.volver_al_mapa)
-        
-        self.botones_bbox.append({
-            "tipo": "volver", "indice": -1,
-            "x_min": rect_volver[0], "y_min": rect_volver[1],
-            "x_max": rect_volver[0] + rect_volver[2], "y_max": rect_volver[1] + rect_volver[3]
-        })
+        self.botones_bbox.append({"tipo": "volver", "indice": -1, "x_min": rect_volver[0], "y_min": rect_volver[1], "x_max": rect_volver[0] + rect_volver[2], "y_max": rect_volver[1] + rect_volver[3]})
+
+        # Área derecha
+        self.ax_fondo_der = self.fig.add_axes([0.27, 0.05, 0.70, 0.90])
+        self.ax_fondo_der.set_facecolor('#222f3e')
+        self.ax_fondo_der.axis("off")
+        for spine in self.ax_fondo_der.spines.values():
+            spine.set_visible(True)
+            spine.set_color('#0984e3')
+            spine.set_linewidth(1.5)
+        self.elementos_ui.append(self.ax_fondo_der)
+
+        # Pestañas
+        nombres_pestanas = ["Resumen General", "Gastronomía Típica", "Guía de Turismo"]
+        posiciones_x = [0.29, 0.51, 0.73]
+        for idx, nombre in enumerate(nombres_pestanas):
+            rect = [posiciones_x[idx], 0.86, 0.21, 0.05]
+            ax_btn = self.fig.add_axes(rect)
+            self.elementos_ui.append(ax_btn)
+            color_fondo = '#0984e3' if idx == self.pestana_activa else '#576574'
+            btn = Button(ax_btn, nombre, color=color_fondo, hovercolor='#48dbfb')
+            btn.label.set_color('white')
+            btn.label.set_weight('bold')
+            btn.label.set_fontsize(12)
+            btn.on_clicked(lambda event, i=idx: self.cambiar_pestana(i))
+            self.botones.append(btn)
+            self.botones_bbox.append({"tipo": "pestana", "indice": idx, "x_min": rect[0], "y_min": rect[1], "x_max": rect[0] + rect[2], "y_max": rect[1] + rect[3]})
+
+        # Panel Imagen 
+        self.ax_imagen = self.fig.add_axes([0.29, 0.20, 0.33, 0.55])
+        self.ax_imagen.axis("off")
+        self.elementos_ui.append(self.ax_imagen)
+
+        # Panel Texto
+        self.ax_texto = self.fig.add_axes([0.64, 0.20, 0.31, 0.55])
+        self.ax_texto.axis("off")
+        self.elementos_ui.append(self.ax_texto)
+        self.ui_titulo = self.ax_texto.text(0.0, 1.0, "", fontsize=18, weight="bold", color="#feca57", va="top")
+        self.ui_subtit = self.ax_texto.text(0.0, 0.88, "", fontsize=13, style="italic", color="#48dbfb", va="top", wrap=True)
+        self.ui_cuerpo = self.ax_texto.text(0.0, 0.72, "", fontsize=13, color="#c8d6e5", va="top", wrap=True, linespacing=1.8)
+        self.elementos_ui.extend([self.ui_titulo, self.ui_subtit, self.ui_cuerpo])
 
         # Cursor Gestual
         self.ax_cursor = self.fig.add_axes([0, 0, 1, 1], zorder=10)
         self.ax_cursor.axis("off")
         self.ax_cursor.set_xlim(0, 1)
         self.ax_cursor.set_ylim(0, 1)
-        self.marcador_mano, = self.ax_cursor.plot([], [], 'o', color='#00ffcc', ms=14, markeredgecolor='white', markeredgewidth=2)
+        self.marcador_mano, = self.ax_cursor.plot([], [], 'o', color='#00d2d3', ms=14, markeredgecolor='white', markeredgewidth=2)
         self.elementos_ui.append(self.ax_cursor)
-
         self.pos_mano_norm = (0.5, 0.5)
+
         self.mostrar_contenido()
 
     def mostrar_contenido(self):
         for idx, btn in enumerate(self.botones):
-            color = '#0984e3' if idx == self.pestana_activa else '#2d3436'
+            color = '#0984e3' if idx == self.pestana_activa else '#576574'
             btn.ax.set_facecolor(color)
 
         if self.pestana_activa == 0:
@@ -130,9 +124,10 @@ class PantallaPais:
         self.ui_subtit.set_text(datos_tab.get("subtitulo", "Subtítulo no encontrado"))
         self.ui_cuerpo.set_text(datos_tab.get("cuerpo", "Descripción no disponible en la base de datos."))
         
-        img_array = datos_tab.get("imagen", np.full((300, 400, 3), 80, dtype=np.uint8))
-        self.visor_imagen.set_data(img_array)
-        self.visor_imagen.set_extent((0, img_array.shape[1], img_array.shape[0], 0))
+        img_array = datos_tab.get("imagen", np.full((300, 400, 3), 40, dtype=np.uint8))
+        self.ax_imagen.clear()
+        self.ax_imagen.axis("off")
+        self.ax_imagen.imshow(img_array)
 
         try:
             self.fig.canvas.draw_idle()
@@ -158,6 +153,40 @@ class PantallaPais:
         y_fig = 1.0 - norm_y
         self.pos_mano_norm = (norm_x, y_fig)
         self.marcador_mano.set_data([norm_x], [y_fig])
+
+        # ─── LÓGICA DE DWELL CLICK (CLIC POR TIEMPO) ───
+        boton_detectado = None
+        for btn_info in self.botones_bbox:
+            # Comprobamos si el puntero está dentro de los límites de algún botón
+            if btn_info["x_min"] <= norm_x <= btn_info["x_max"] and btn_info["y_min"] <= y_fig <= btn_info["y_max"]:
+                boton_detectado = btn_info
+                break
+
+        if boton_detectado:
+            # Feedback visual: Cursor amarillo y más grande
+            self.marcador_mano.set_color('#feca57')
+            self.marcador_mano.set_markersize(18)
+            
+            # Si acabamos de entrar a un botón nuevo, iniciamos el cronómetro
+            if self.boton_hover_actual != boton_detectado:
+                self.boton_hover_actual = boton_detectado
+                self.tiempo_inicio_hover = time.time()
+            else:
+                # Si seguimos en el mismo botón, verificamos el tiempo
+                tiempo_transcurrido = time.time() - self.tiempo_inicio_hover
+                if tiempo_transcurrido >= 1.5:  # 1.5 segundos
+                    self.ejecutar_click_gesto()
+                    
+                    # Reseteamos para no hacer clics infinitos consecutivos
+                    self.boton_hover_actual = None
+                    self.tiempo_inicio_hover = 0
+        else:
+            # Feedback visual: Cursor vuelve a la normalidad al salir del botón
+            self.marcador_mano.set_color('#00d2d3')
+            self.marcador_mano.set_markersize(14)
+            self.boton_hover_actual = None
+            self.tiempo_inicio_hover = 0
+
         try:
             self.fig.canvas.draw_idle()
         except Exception:

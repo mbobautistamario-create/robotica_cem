@@ -73,14 +73,11 @@ async def Ver_gestos(estado_punto):
             norm_x, norm_y = Posicion_mano(resultados)
 
             if estado_punto.mapa.pantalla_info_activa:
+                # Actualiza la posición y la pantalla se encarga de hacer clic por tiempo
                 estado_punto.mapa.Actualizar_cursor_info(norm_x, norm_y)
-                if Mano_cerrada(resultados):
-                    cv2.putText(image_rgb, "Click!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-                    if not mano_cerrada:
-                        mano_cerrada = True
-                        estado_punto.mapa.Ejecutar_click_info()
-                else:
-                    mano_cerrada = False
+                
+                # Desactivamos el cierre de mano accidental mientras lee
+                mano_cerrada = False
             else:
                 if Mano_cerrada(resultados):
                     mano_agarre = False
