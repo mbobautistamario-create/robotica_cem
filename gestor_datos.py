@@ -14,7 +14,6 @@ class GestorDatosPais:
         self.conexion = None
         self.server = None
         
-        # 1. Cargar el libro de mapeo en memoria
         self.mapeo_local = self._cargar_mapeo_local()
         
         self.traducciones = {
@@ -66,7 +65,6 @@ class GestorDatosPais:
             print(f"⚠️ Error crítico de conexión: {e}")
 
     def _cargar_mapeo_local(self):
-        """Lee el archivo generado por descargar_activos.py y retorna un diccionario."""
         mapeo = {}
         ruta_archivo = "mapeo_imagenes.txt"
         if os.path.exists(ruta_archivo):
@@ -85,8 +83,7 @@ class GestorDatosPais:
         return self.traducciones.get(nombre_ing, nombre_ing)
 
     def cargar_imagen_local(self, ruta_db):
-        """Busca la URL en el diccionario y carga el archivo físico correspondiente."""
-        imagen_error = np.full((300, 400, 3), 80, dtype=np.uint8)
+        imagen_error = np.full((300, 400, 3), 40, dtype=np.uint8)
         
         if not ruta_db:
             return imagen_error
@@ -94,14 +91,11 @@ class GestorDatosPais:
         ruta_db = ruta_db.strip()
         ruta_fisica = None
 
-        # Si es una URL de la BD, buscamos su equivalente local en el mapeo
         if ruta_db.startswith("http"):
             ruta_fisica = self.mapeo_local.get(ruta_db)
         else:
-            # Para casos como 'surinam.png' que ya son rutas relativas en la BD
             ruta_fisica = ruta_db
 
-        # Intentamos abrir el archivo físico
         if ruta_fisica and os.path.exists(ruta_fisica):
             try:
                 img_pil = Image.open(ruta_fisica).convert("RGB")
@@ -120,6 +114,8 @@ class GestorDatosPais:
             return self.cache_paises[nombre_es]
 
         info = {
+            "pais_data": {},  # <--- NUEVO: Aquí guardaremos todos los datos crudos de PAIS
+            "header_img": np.zeros((10,10,3), dtype=np.uint8),
             "general": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
             "cultura": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)},
             "datos": {"titulo": "Sin Datos", "subtitulo": "", "cuerpo": "No hay información.", "imagen": np.zeros((10,10,3), dtype=np.uint8)}
@@ -130,13 +126,19 @@ class GestorDatosPais:
 
         try:
             cursor = self.conexion.cursor(dictionary=True)
-            cursor.execute("SELECT ID_pais FROM PAIS WHERE nombre = %s LIMIT 1;", (nombre_es,))
+            
+            # ─── CAMBIO: Extraemos TODOS los campos de la tabla PAIS ───
+            cursor.execute("SELECT * FROM PAIS WHERE nombre = %s LIMIT 1;", (nombre_es,))
             pais_db = cursor.fetchone()
             
             if pais_db:
                 id_pais = pais_db['ID_pais']
+                
+                # Guardamos los datos crudos para el minimini pantallazo futuro
+                info["pais_data"] = pais_db 
+                info["header_img"] = self.cargar_imagen_local(pais_db.get('imagen'))
 
-                # ─── 1. GENERAL ───
+                # 1. GENERAL
                 cursor.execute("SELECT descripcion, historia, relieve, imagen FROM GENERAL WHERE ID_pais = %s LIMIT 1;", (id_pais,))
                 general = cursor.fetchone()
                 if not general: 
@@ -147,7 +149,6 @@ class GestorDatosPais:
                     desc_cruda = general.get('descripcion', '')
                     subtitulo = desc_cruda.split('-', 1)[1].strip() if '-' in desc_cruda else desc_cruda
                     cuerpo_gen = f"■ HISTORIA:\n{general.get('historia', '')}\n\n■ RELIEVE:\n{general.get('relieve', '')}"
-                    
                     info["general"] = {
                         "titulo": "Resumen Geopolítico",
                         "subtitulo": subtitulo,
@@ -155,12 +156,11 @@ class GestorDatosPais:
                         "imagen": self.cargar_imagen_local(general.get('imagen'))
                     }
 
-                # ─── 2. CULTURA (GASTRONOMÍA) ───
+                # 2. GASTRONOMÍA
                 cursor.execute("SELECT descripcion, imagen FROM GASTRONOMIA WHERE ID_pais = %s LIMIT 1;", (id_pais,))
                 gastro = cursor.fetchone()
                 if gastro:
                     desc_cruda = gastro.get('descripcion', '')
-                    # Separador inteligente para extraer "Argentina - Asado: Carne..." -> "Asado"
                     if '-' in desc_cruda and ':' in desc_cruda:
                         partes = desc_cruda.split('-', 1)[1].split(':', 1)
                         plato = partes[0].strip()
@@ -176,7 +176,7 @@ class GestorDatosPais:
                         "imagen": self.cargar_imagen_local(gastro.get('imagen'))
                     }
 
-                # ─── 3. TURISMO ───
+                # 3. TURISMO
                 cursor.execute("SELECT descripcion, cant_lugares, imagen FROM TURISMO WHERE id_pais = %s LIMIT 1;", (id_pais,))
                 turismo = cursor.fetchone()
                 if turismo:

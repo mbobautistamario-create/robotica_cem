@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib.widgets import Button
 import numpy as np
 
@@ -19,21 +20,27 @@ class PantallaPais:
     def construir_interfaz(self):
         self.fig.patch.set_facecolor('#1e272e')
 
-        # ─── 1. EL GRAN TÍTULO DEL PAÍS (Arriba de todo) ───
+        # ─── 1. EL GRAN TÍTULO DEL PAÍS (HEADER ESTILO WEB) ───
         self.ax_header = self.fig.add_axes([0.10, 0.88, 0.80, 0.08])
         self.ax_header.axis("off")
-        self.elementos_ui.append(self.ax_header)
+        
+        # Renderizamos la imagen de la tabla PAIS como fondo
+        img_header = self.info.get("header_img", np.full((100, 100, 3), 40, dtype=np.uint8))
+        self.ax_header.imshow(img_header, aspect='auto')
+        
+        # Filtro oscuro semitransparente (alpha=0.5) para asegurar que el texto sea legible
+        self.ax_header.add_patch(patches.Rectangle((0, 0), 1, 1, transform=self.ax_header.transAxes, color='black', alpha=0.5))
 
+        # Texto centrado usando coordenadas relativas al recuadro (transAxes)
         titulo_principal = self.ax_header.text(
             0.5, 0.5, f" 🌍  {self.nombre_pais.upper()}  🌍 ",
             fontsize=26, weight="black", color="#ffffff",
-            ha="center", va="center"
+            ha="center", va="center", transform=self.ax_header.transAxes
         )
-        self.elementos_ui.append(titulo_principal)
+        self.elementos_ui.append(self.ax_header)
 
         # ─── 2. LOS BOTONES DE NAVEGACIÓN ───
         nombres_pestanas = ["Resumen General", "Gastronomía Típica", "Guía de Turismo"]
-        # Distribuimos los botones para que ocupen todo el ancho simétricamente
         posiciones_x = [0.10, 0.40, 0.70]
         ancho_btn = 0.20
         alto_btn = 0.04
@@ -57,14 +64,13 @@ class PantallaPais:
                 "x_max": rect[0] + rect[2], "y_max": rect[1] + rect[3]
             })
 
-        # ─── 3. PANEL DE IMAGEN (Mitad Izquierda Exacta) ───
+        # ─── 3. PANEL DE IMAGEN DE CONTENIDO ───
         self.ax_imagen = self.fig.add_axes([0.10, 0.15, 0.40, 0.62])
         self.ax_imagen.axis("off")
-        # CLAVE: aspect='auto' fuerza a la imagen a llenar el 100% de la caja asignada
         self.visor_imagen = self.ax_imagen.imshow(np.zeros((100, 100, 3), dtype=np.uint8), aspect='auto')
         self.elementos_ui.append(self.ax_imagen)
 
-        # ─── 4. PANEL DE INFORMACIÓN ESTRUCTURADA (Mitad Derecha Exacta) ───
+        # ─── 4. PANEL DE INFORMACIÓN ESTRUCTURADA ───
         self.ax_texto = self.fig.add_axes([0.55, 0.15, 0.35, 0.62])
         self.ax_texto.set_facecolor('#2d3436')
         self.ax_texto.axis("off")
@@ -124,7 +130,6 @@ class PantallaPais:
         self.ui_subtit.set_text(datos_tab.get("subtitulo", "Subtítulo no encontrado"))
         self.ui_cuerpo.set_text(datos_tab.get("cuerpo", "Descripción no disponible en la base de datos."))
         
-        # Renderizar la imagen llenando la caja asignada
         img_array = datos_tab.get("imagen", np.full((300, 400, 3), 80, dtype=np.uint8))
         self.visor_imagen.set_data(img_array)
         self.visor_imagen.set_extent((0, img_array.shape[1], img_array.shape[0], 0))
